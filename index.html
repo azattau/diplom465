@@ -1,0 +1,2138 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Система 112 — Мониторинг воздушных объектов (Треки, Прогноз и Цели оператора)</title>
+    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+    <style>
+        :root {
+            --bg-panel: #0f172a;
+            --bg-card: #1e293b;
+            --bg-input: #0b1120;
+            --border: #334155;
+            --text-main: #f8fafc;
+            --text-muted: #94a3b8;
+            --accent: #3b82f6;
+            --accent-hover: #2563eb;
+            --danger: #ef4444;
+            --success: #22c55e;
+            --warning: #f59e0b;
+            --cyan: #38bdf8;
+        }
+
+        * { box-sizing: border-box; }
+
+        html, body {
+            margin: 0;
+            padding: 0;
+            width: 100%;
+            height: 100%;
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Inter, sans-serif;
+            background: #0f172a;
+            color: var(--text-main);
+            overflow: hidden;
+        }
+
+        .app-layout {
+            display: flex;
+            width: 100vw;
+            height: 100vh;
+        }
+
+        .sidebar {
+            width: 460px;
+            min-width: 390px;
+            max-width: 485px;
+            height: 100vh;
+            background: var(--bg-panel);
+            border-right: 1px solid var(--border);
+            display: flex;
+            flex-direction: column;
+            z-index: 1000;
+            box-shadow: 4px 0 20px rgba(0, 0, 0, 0.35);
+        }
+
+        .sidebar-header {
+            padding: 12px 15px;
+            border-bottom: 1px solid var(--border);
+            background: linear-gradient(135deg, #0f172a 0%, #1e293b 100%);
+        }
+
+        .header-badge-row {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            margin-bottom: 5px;
+            gap: 6px;
+        }
+
+        .service-badge {
+            display: inline-flex;
+            align-items: center;
+            gap: 6px;
+            font-size: 11px;
+            font-weight: 700;
+            text-transform: uppercase;
+            letter-spacing: 0.05em;
+            padding: 4px 8px;
+            border-radius: 6px;
+            background: rgba(239, 68, 68, 0.16);
+            color: #fca5a5;
+            border: 1px solid rgba(239, 68, 68, 0.35);
+        }
+
+        .status-pill {
+            display: inline-flex;
+            align-items: center;
+            gap: 6px;
+            font-size: 11px;
+            padding: 4px 9px;
+            border-radius: 999px;
+            background: rgba(148, 163, 184, 0.15);
+            color: var(--text-main);
+            border: 1px solid var(--border);
+            cursor: pointer;
+            transition: background 0.15s;
+        }
+
+        .status-pill:hover {
+            background: rgba(59, 130, 246, 0.25);
+            border-color: var(--accent);
+        }
+
+        .status-dot {
+            width: 8px;
+            height: 8px;
+            border-radius: 50%;
+            background: var(--warning);
+        }
+
+        .status-dot.online {
+            background: var(--success);
+            box-shadow: 0 0 8px var(--success);
+        }
+
+        .sidebar-title {
+            margin: 0;
+            font-size: 15px;
+            font-weight: 700;
+            line-height: 1.3;
+        }
+
+        .sidebar-subtitle {
+            margin: 2px 0 0 0;
+            font-size: 11px;
+            color: var(--text-muted);
+        }
+
+        .sidebar-body {
+            flex: 1;
+            overflow-y: auto;
+            padding: 11px 13px;
+            display: flex;
+            flex-direction: column;
+            gap: 10px;
+        }
+
+        .section-card {
+            background: var(--bg-card);
+            border: 1px solid var(--border);
+            border-radius: 10px;
+            padding: 10px 12px;
+        }
+
+        .section-title {
+            font-size: 11px;
+            font-weight: 700;
+            text-transform: uppercase;
+            letter-spacing: 0.05em;
+            color: var(--text-muted);
+            margin: 0 0 8px 0;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            gap: 6px;
+        }
+
+        .diag-box {
+            display: none;
+            background: #172554;
+            border: 1px solid #3b82f6;
+            border-radius: 9px;
+            padding: 10px 12px;
+            font-size: 12px;
+            line-height: 1.45;
+            color: #e2e8f0;
+        }
+
+        .diag-box h4 {
+            margin: 0 0 6px 0;
+            font-size: 13px;
+            color: #93c5fd;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+
+        .diag-step {
+            background: rgba(15, 23, 42, 0.65);
+            border-radius: 6px;
+            padding: 6px 8px;
+            margin-top: 6px;
+            font-size: 11.5px;
+        }
+
+        .diag-btn {
+            margin-top: 8px;
+            background: #22c55e;
+            color: #052e16;
+            border: none;
+            border-radius: 6px;
+            padding: 6px 10px;
+            font-size: 11.5px;
+            font-weight: 700;
+            cursor: pointer;
+            width: 100%;
+        }
+
+        .form-row {
+            display: flex;
+            gap: 7px;
+            margin-bottom: 7px;
+        }
+
+        .form-group {
+            display: flex;
+            flex-direction: column;
+            gap: 3px;
+            flex: 1;
+            margin-bottom: 6px;
+        }
+
+        label {
+            font-size: 11px;
+            color: var(--text-muted);
+            font-weight: 600;
+        }
+
+        select, input[type="text"], input[type="time"], textarea {
+            width: 100%;
+            background: var(--bg-input);
+            border: 1px solid var(--border);
+            color: var(--text-main);
+            border-radius: 7px;
+            padding: 6px 9px;
+            font-size: 12px;
+            font-family: inherit;
+            outline: none;
+            transition: border-color 0.15s;
+        }
+
+        select:focus, input:focus, textarea:focus {
+            border-color: var(--accent);
+        }
+
+        textarea {
+            resize: vertical;
+            min-height: 62px;
+            line-height: 1.35;
+        }
+
+        .presets-label {
+            font-size: 10.5px;
+            color: var(--text-muted);
+            margin: 2px 0 5px 0;
+        }
+
+        .preset-chips {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 5px;
+            margin-bottom: 8px;
+        }
+
+        .preset-chip {
+            background: rgba(59, 130, 246, 0.12);
+            color: #93c5fd;
+            border: 1px solid rgba(59, 130, 246, 0.3);
+            border-radius: 6px;
+            padding: 4px 7px;
+            font-size: 10.5px;
+            cursor: pointer;
+            transition: all 0.15s;
+        }
+
+        .preset-chip:hover {
+            background: rgba(59, 130, 246, 0.25);
+            color: #fff;
+        }
+
+        .action-btns-row {
+            display: flex;
+            gap: 6px;
+        }
+
+        .btn-primary {
+            flex: 1.35;
+            background: var(--accent);
+            color: #ffffff;
+            border: none;
+            border-radius: 7px;
+            padding: 8px 10px;
+            font-size: 12px;
+            font-weight: 600;
+            cursor: pointer;
+            transition: background 0.15s;
+        }
+
+        .btn-primary:hover:not(:disabled) {
+            background: var(--accent-hover);
+        }
+
+        .btn-compare {
+            flex: 1;
+            background: rgba(245, 158, 11, 0.16);
+            color: #fcd34d;
+            border: 1px solid rgba(245, 158, 11, 0.45);
+            border-radius: 7px;
+            padding: 8px 8px;
+            font-size: 11.5px;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.15s;
+        }
+
+        .btn-compare:hover:not(:disabled) {
+            background: rgba(245, 158, 11, 0.28);
+            color: #fff;
+        }
+
+        .btn-secondary {
+            background: rgba(56, 189, 248, 0.14);
+            color: #7dd3fc;
+            border: 1px solid rgba(56, 189, 248, 0.4);
+            border-radius: 7px;
+            padding: 6px 9px;
+            font-size: 11.5px;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.15s;
+        }
+
+        .btn-secondary:hover, .btn-secondary.active-pick {
+            background: #0284c7;
+            color: #fff;
+            border-color: #38bdf8;
+        }
+
+        .btn-clear {
+            background: transparent;
+            color: #fca5a5;
+            border: 1px solid rgba(239, 68, 68, 0.35);
+            border-radius: 6px;
+            padding: 2px 7px;
+            font-size: 10.5px;
+            cursor: pointer;
+        }
+
+        /* Карточка единого трека и скорости */
+        .track-summary-box {
+            background: var(--bg-input);
+            border: 1px solid rgba(56, 189, 248, 0.35);
+            border-left: 3px solid var(--cyan);
+            border-radius: 7px;
+            padding: 8px 10px;
+            font-size: 11.5px;
+            line-height: 1.45;
+        }
+
+        .track-metric-row {
+            display: flex;
+            justify-content: space-between;
+            padding: 2px 0;
+        }
+
+        /* Охраняемые объекты (цели оператора) */
+        .targets-list {
+            display: flex;
+            flex-direction: column;
+            gap: 6px;
+            margin-top: 8px;
+        }
+
+        .target-card {
+            background: var(--bg-input);
+            border: 1px solid var(--border);
+            border-radius: 7px;
+            padding: 7px 9px;
+            font-size: 11.5px;
+        }
+
+        .target-card.risk-high {
+            border-color: rgba(239, 68, 68, 0.65);
+            background: rgba(239, 68, 68, 0.08);
+        }
+
+        .target-card.risk-medium {
+            border-color: rgba(245, 158, 11, 0.55);
+        }
+
+        .target-top {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 4px;
+            gap: 6px;
+        }
+
+        .target-name {
+            font-weight: 700;
+            color: #f8fafc;
+            cursor: pointer;
+        }
+
+        .target-name:hover {
+            color: var(--cyan);
+        }
+
+        .prob-badge {
+            font-size: 11px;
+            font-weight: 700;
+            padding: 2px 6px;
+            border-radius: 4px;
+        }
+
+        .prob-high { background: rgba(239, 68, 68, 0.25); color: #fca5a5; }
+        .prob-medium { background: rgba(245, 158, 11, 0.22); color: #fcd34d; }
+        .prob-low { background: rgba(34, 197, 94, 0.18); color: #86efac; }
+
+        .prob-bar-bg {
+            width: 100%;
+            height: 5px;
+            background: #1e293b;
+            border-radius: 3px;
+            overflow: hidden;
+            margin: 4px 0;
+        }
+
+        .prob-bar-fill {
+            height: 100%;
+            border-radius: 3px;
+            transition: width 0.3s;
+        }
+
+        .compare-box {
+            display: none;
+            margin-top: 8px;
+            background: var(--bg-input);
+            border: 1px solid #475569;
+            border-radius: 8px;
+            padding: 8px;
+            font-size: 11px;
+        }
+
+        .compare-table {
+            width: 100%;
+            border-collapse: collapse;
+            font-size: 11px;
+        }
+
+        .compare-table th, .compare-table td {
+            border-bottom: 1px solid #334155;
+            padding: 4px 4px;
+            text-align: left;
+            vertical-align: top;
+        }
+
+        .compare-table th { color: #93c5fd; font-weight: 700; }
+        .badge-ok { color: #4ade80; font-weight: 700; }
+        .badge-fail { color: #f87171; font-weight: 700; }
+
+        .disambig-box {
+            display: none;
+            margin-top: 8px;
+            background: rgba(245, 158, 11, 0.12);
+            border: 1px solid rgba(245, 158, 11, 0.45);
+            border-radius: 8px;
+            padding: 8px 10px;
+        }
+
+        .disambig-title {
+            font-size: 11px;
+            font-weight: 700;
+            color: #fcd34d;
+            margin-bottom: 5px;
+        }
+
+        .disambig-chips {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 5px;
+            max-height: 110px;
+            overflow-y: auto;
+        }
+
+        .disambig-chip {
+            background: #0f172a;
+            color: #fde68a;
+            border: 1px solid rgba(245, 158, 11, 0.4);
+            border-radius: 5px;
+            padding: 3px 7px;
+            font-size: 10.5px;
+            cursor: pointer;
+        }
+
+        .disambig-chip:hover, .disambig-chip.active {
+            background: #f59e0b;
+            color: #0f172a;
+            font-weight: 700;
+        }
+
+        .events-list {
+            display: flex;
+            flex-direction: column;
+            gap: 6px;
+        }
+
+        .event-item {
+            background: var(--bg-input);
+            border: 1px solid var(--border);
+            border-left: 3px solid var(--danger);
+            border-radius: 7px;
+            padding: 7px 9px;
+            cursor: pointer;
+        }
+
+        .event-item:hover { border-color: var(--accent); }
+        .event-item-top { display: flex; justify-content: space-between; align-items: center; margin-bottom: 2px; }
+        .event-place { font-size: 12.5px; font-weight: 700; color: #f8fafc; }
+        .event-time-badge {
+            font-size: 10.5px;
+            font-weight: 600;
+            color: #93c5fd;
+            background: rgba(59, 130, 246, 0.15);
+            padding: 2px 6px;
+            border-radius: 4px;
+        }
+        .event-district { font-size: 10.5px; color: #93c5fd; margin-bottom: 3px; font-weight: 600; }
+        .event-text { font-size: 11.5px; color: #cbd5e1; line-height: 1.3; }
+        .event-vector-tag {
+            margin-top: 4px;
+            display: inline-block;
+            font-size: 10.5px;
+            color: #fcd34d;
+            background: rgba(245, 158, 11, 0.14);
+            border: 1px solid rgba(245, 158, 11, 0.3);
+            padding: 2px 6px;
+            border-radius: 4px;
+        }
+
+        .map-container { flex: 1; height: 100vh; position: relative; }
+        #map { width: 100%; height: 100%; }
+
+        .map-pick-banner {
+            display: none;
+            position: absolute;
+            top: 14px;
+            left: 50%;
+            transform: translateX(-50%);
+            z-index: 1200;
+            background: #0284c7;
+            color: #ffffff;
+            padding: 8px 16px;
+            border-radius: 999px;
+            font-size: 13px;
+            font-weight: 700;
+            box-shadow: 0 6px 20px rgba(0, 0, 0, 0.45);
+            border: 2px solid #bae6fd;
+        }
+
+        .leaflet-popup-content-wrapper {
+            background: #0f172a;
+            color: #f8fafc;
+            border: 1px solid #334155;
+            border-radius: 10px;
+            box-shadow: 0 10px 25px rgba(0, 0, 0, 0.5);
+        }
+        .leaflet-popup-tip { background: #0f172a; }
+        .popup-card { min-width: 250px; max-width: 315px; }
+        .popup-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            border-bottom: 1px solid #334155;
+            padding-bottom: 6px;
+            margin-bottom: 7px;
+            gap: 8px;
+        }
+        .popup-title { font-size: 13.5px; font-weight: 700; color: #f8fafc; }
+        .popup-time {
+            font-size: 11.5px;
+            font-weight: 700;
+            background: #ef4444;
+            color: #fff;
+            padding: 2px 7px;
+            border-radius: 4px;
+        }
+        .popup-field { margin-bottom: 5px; font-size: 12px; line-height: 1.35; }
+        .popup-label {
+            color: #94a3b8;
+            font-size: 10.5px;
+            display: block;
+            text-transform: uppercase;
+        }
+        .popup-msg-box {
+            background: #1e293b;
+            border-left: 3px solid #3b82f6;
+            padding: 6px 8px;
+            border-radius: 4px;
+            color: #f1f5f9;
+            font-size: 12px;
+            margin: 4px 0;
+        }
+        .popup-coords { font-size: 10.5px; color: #64748b; margin-top: 5px; }
+
+        .uav-marker-icon { display: flex; align-items: center; justify-content: center; }
+        .uav-pin {
+            width: 20px;
+            height: 20px;
+            border-radius: 50%;
+            background: #ef4444;
+            border: 3px solid #ffffff;
+            box-shadow: 0 0 0 rgba(239, 68, 68, 0.7);
+            animation: pulse 1.8s infinite;
+        }
+
+        .target-pin {
+            width: 26px;
+            height: 26px;
+            border-radius: 50%;
+            background: #0284c7;
+            border: 2px solid #ffffff;
+            color: #fff;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 13px;
+            box-shadow: 0 0 12px rgba(56, 189, 248, 0.8);
+        }
+
+        .forecast-pin {
+            background: #22c55e;
+            color: #052e16;
+            font-size: 10px;
+            font-weight: 800;
+            padding: 2px 5px;
+            border-radius: 4px;
+            border: 1px solid #fff;
+            white-space: nowrap;
+        }
+
+        @keyframes pulse {
+            0% { box-shadow: 0 0 0 0 rgba(239, 68, 68, 0.7); }
+            70% { box-shadow: 0 0 0 14px rgba(239, 68, 68, 0); }
+            100% { box-shadow: 0 0 0 0 rgba(239, 68, 68, 0); }
+        }
+
+        .error-banner {
+            background: rgba(239, 68, 68, 0.16);
+            border: 1px solid rgba(239, 68, 68, 0.4);
+            color: #fecaca;
+            padding: 7px 9px;
+            border-radius: 7px;
+            font-size: 11.5px;
+            margin-top: 7px;
+            display: none;
+        }
+    </style>
+</head>
+<body>
+    <div class="app-layout">
+        <aside class="sidebar">
+            <div class="sidebar-header">
+                <div class="header-badge-row">
+                    <span class="service-badge">● Служба 112 / МЧС РБ</span>
+                    <button type="button" class="status-pill" id="ollamaDiagBtn">
+                        <span class="status-dot" id="ollamaDot"></span>
+                        <span id="ollamaStatusText">🔌 Настроить Ollama</span>
+                    </button>
+                </div>
+                <h1 class="sidebar-title">Мониторинг воздушных объектов</h1>
+                <p class="sidebar-subtitle">3 метода NLP/LLM + Единый трек и прогноз + Охраняемые объекты</p>
+            </div>
+
+            <div class="sidebar-body">
+                <!-- Диагностика Ollama -->
+                <div class="diag-box" id="diagBox">
+                    <h4>
+                        <span>🔌 Диагностика подключения к Ollama</span>
+                        <button type="button" id="closeDiagBtn" style="background:none;border:none;color:#93c5fd;cursor:pointer;font-size:14px;">✕</button>
+                    </h4>
+                    <div id="diagStatusMessage">Проверка соединения...</div>
+                    <div class="diag-step">
+                        1. Запускайте систему через <code>start_windows.bat</code> (откроется <code>http://localhost:8000</code>).<br/>
+                        2. Чтобы скачать модель в Ollama, нажмите кнопку ниже или выполните в <code>cmd</code>: <code>ollama pull qwen2.5:3b</code>
+                    </div>
+                    <button type="button" class="diag-btn" id="autoPullBtn">⬇️ Скачать русскую модель qwen2.5:3b автоматически</button>
+                </div>
+
+                <!-- Блок 1: Ввод сообщения и 3 метода распознавания -->
+                <div class="section-card">
+                    <div class="section-title">
+                        <span>1. Ввод обращения 112 и выбор метода</span>
+                    </div>
+
+                    <div class="form-group">
+                        <label for="modeSelect">Метод распознавания текста (1 из 3):</label>
+                        <select id="modeSelect">
+                            <option value="method_3_hybrid">Метод 3: Гибридный (LLM Ollama + Морфология ФИАС)</option>
+                            <option value="method_2_morph">Метод 2: Алгоритмический (Морфология + Нечёткий поиск)</option>
+                            <option value="method_1_baseline">Метод 1: Базовый (точная подстрока в им. падеже — метод научрука)</option>
+                        </select>
+                    </div>
+
+                    <div class="form-row">
+                        <div class="form-group" style="flex: 1.25; margin-bottom: 0;">
+                            <label for="modelSelect">Модель Ollama:</label>
+                            <select id="modelSelect">
+                                <option value="">Автовыбор модели...</option>
+                            </select>
+                        </div>
+                        <div class="form-group" style="flex: 0.85; margin-bottom: 0;">
+                            <label for="timeInput">Время фиксации:</label>
+                            <input type="time" id="timeInput" />
+                        </div>
+                    </div>
+
+                    <div class="form-group" style="margin-top: 5px;">
+                        <label for="districtSelect">Район (при одноимённых посёлках):</label>
+                        <select id="districtSelect">
+                            <option value="">Автоопределение района из текста</option>
+                        </select>
+                    </div>
+
+                    <div class="form-group">
+                        <label for="messageInput">Текст сообщения очевидца:</label>
+                        <textarea id="messageInput" placeholder="Введите сообщение (или нажмите последовательно кнопки сценария ниже для построения единого трека)..."></textarea>
+                    </div>
+
+                    <div class="presets-label">Реальные сообщения из файла «Сообщения из ПВН.docx» (по времени):</div>
+                    <div class="preset-chips">
+                        <button type="button" class="preset-chip" data-time="09:35" data-text="09-35 Ермекеевский район н.п. Рятамак в сторону Белебей">1 (09:35): с. Рятамак → Белебей</button>
+                        <button type="button" class="preset-chip" data-time="09:39" data-text="09-39 Ермекеевский район н.п. Талды Булак в сторону Приютово">2 (09:39): д. Талды-Булак → Приютово</button>
+                        <button type="button" class="preset-chip" data-time="09:45" data-text="9.45 С. Баженово, Белебеевский район, сильный звук, пролетел быстро в сторону Белебея">3 (09:45): с. Баженово → Белебей</button>
+                        <button type="button" class="preset-chip" data-time="09:50" data-text="09.50 над Аксеново, пролетело 2 беспилотника со стороны Воздвиженки в сторону Раевки метров 50">4 (09:50): с. Аксеново → Раевка</button>
+                        <button type="button" class="preset-chip" id="loadPvnBatchBtn" style="background:rgba(34,197,94,0.18);color:#86efac;border-color:rgba(34,197,94,0.45);">📂 Загрузить пакет (12 сводок из ПВН)</button>
+                    </div>
+
+                    <div class="action-btns-row">
+                        <button type="button" class="btn-primary" id="submitBtn">
+                            <span id="submitBtnText">Отметить на карте</span>
+                        </button>
+                        <button type="button" class="btn-compare" id="compareBtn">
+                            ⚡ Сравнить 3 метода
+                        </button>
+                    </div>
+
+                    <div class="error-banner" id="errorBanner"></div>
+
+                    <div class="compare-box" id="compareBox">
+                        <div style="font-weight:700;color:#fcd34d;margin-bottom:4px;display:flex;justify-content:space-between;">
+                            <span>Сравнение 3 методов:</span>
+                            <button type="button" id="closeCompareBtn" style="background:none;border:none;color:#94a3b8;cursor:pointer;">✕</button>
+                        </div>
+                        <table class="compare-table">
+                            <thead>
+                                <tr><th>Метод</th><th>Найденный НП</th><th>Вектор</th><th>Время</th></tr>
+                            </thead>
+                            <tbody id="compareTableBody"></tbody>
+                        </table>
+                    </div>
+
+                    <div class="disambig-box" id="disambigBox">
+                        <div class="disambig-title" id="disambigTitle"></div>
+                        <div class="disambig-chips" id="disambigChips"></div>
+                    </div>
+                </div>
+
+                <!-- Блок 2: Единый маршрут (Трек пролёта), расчёт скорости и прогноз +15/+30 мин -->
+                <div class="section-card">
+                    <div class="section-title">
+                        <span>2. Траектория (Трек), скорость и прогноз</span>
+                        <label style="display:inline-flex;align-items:center;gap:4px;cursor:pointer;text-transform:none;">
+                            <input type="checkbox" id="toggleTrackChk" checked /> На карте
+                        </label>
+                    </div>
+                    <div class="track-summary-box" id="trackSummaryBox">
+                        Добавьте 2 или более точек с разным временем, чтобы система построила единый маршрут, вычислила путевую скорость (км/ч) и прогноз положения (+15 / +30 мин).
+                    </div>
+                </div>
+
+                <!-- Блок 3: Охраняемые объекты (добавляются самим оператором) и оценка угрозы -->
+                <div class="section-card">
+                    <div class="section-title">
+                        <span>3. 🎯 Охраняемые объекты оператора (<span id="targetsCount">0</span>)</span>
+                        <div style="display:flex;gap:4px;">
+                            <button type="button" class="btn-secondary" id="presetTargetsBtn" style="padding:2px 6px;font-size:10px;">+ 3 цели РБ</button>
+                            <button type="button" class="btn-clear" id="clearTargetsBtn">Очистить</button>
+                        </div>
+                    </div>
+
+                    <div class="form-row" style="margin-bottom:6px;">
+                        <input type="text" id="targetNameInput" placeholder="Название цели (напр., Объект №1)" style="flex:1.1;" />
+                        <input type="text" id="targetSettlementInput" placeholder="Город/село (если без клика)" style="flex:1;" />
+                    </div>
+
+                    <div class="action-btns-row">
+                        <button type="button" class="btn-secondary" id="pickTargetOnMapBtn" style="flex:1.2;">
+                            📍 Кликнуть точку цели на карте
+                        </button>
+                        <button type="button" class="btn-secondary" id="addTargetByNameBtn" style="flex:1;">
+                            ➕ Добавить по НП
+                        </button>
+                    </div>
+
+                    <div class="targets-list" id="targetsList">
+                        <div style="font-size:11.5px;color:var(--text-muted);text-align:center;padding:6px 0;">
+                            Оператор может сам поставить охраняемые точки кликом по карте или кнопкой «+ 3 цели РБ» — система рассчитает % вероятности угрозы и подлётное время.
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Блок 4: Журнал точек -->
+                <div class="section-card" style="flex: 1; display: flex; flex-direction: column;">
+                    <div class="section-title">
+                        <span>4. Отмеченные сообщения 112 (<span id="eventsCount">0</span>)</span>
+                        <button type="button" class="btn-clear" id="clearBtn">Очистить точки</button>
+                    </div>
+                    <div class="events-list" id="eventsList"></div>
+                </div>
+            </div>
+        </aside>
+
+        <main class="map-container">
+            <div class="map-pick-banner" id="mapPickBanner">
+                🎯 Кликните в любое место на карте, чтобы поставить охраняемый объект (ESC — отмена)
+            </div>
+            <div id="map"></div>
+        </main>
+    </div>
+
+    <script src="settlements_data.js"></script>
+    <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+    <script>
+        const map = L.map('map').setView([54.35, 55.8], 7);
+
+        L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+            maxZoom: 19,
+            attribution: '© OpenStreetMap contributors'
+        }).addTo(map);
+
+        const markersLayer = L.layerGroup().addTo(map);
+        const trackLayer = L.layerGroup().addTo(map);
+        const targetsLayer = L.layerGroup().addTo(map);
+
+        let observationsState = [];
+        let targetsState = [];
+        let analyticsState = null;
+        let backendAvailable = false;
+        let isPickingTargetOnMap = false;
+
+        const districtSelectEl = document.getElementById('districtSelect');
+        if (window.DISTRICTS_LIST && Array.isArray(window.DISTRICTS_LIST)) {
+            window.DISTRICTS_LIST.forEach(d => {
+                const opt = document.createElement('option');
+                opt.value = d;
+                opt.textContent = d.replace(' муниципальный район', ' р-н');
+                districtSelectEl.appendChild(opt);
+            });
+        }
+
+        function setDefaultTime() {
+            const now = new Date();
+            const hh = String(now.getHours()).padStart(2, '0');
+            const mm = String(now.getMinutes()).padStart(2, '0');
+            document.getElementById('timeInput').value = `${hh}:${mm}`;
+        }
+        setDefaultTime();
+
+        document.querySelectorAll('.preset-chip:not(#loadPvnBatchBtn)').forEach(btn => {
+            btn.addEventListener('click', () => {
+                document.getElementById('messageInput').value = btn.getAttribute('data-text');
+                const presetTime = btn.getAttribute('data-time');
+                if (presetTime) document.getElementById('timeInput').value = presetTime;
+                document.getElementById('districtSelect').value = '';
+            });
+        });
+
+        const loadBatchBtn = document.getElementById('loadPvnBatchBtn');
+        if (loadBatchBtn) {
+            loadBatchBtn.addEventListener('click', async () => {
+                loadBatchBtn.disabled = true;
+                loadBatchBtn.textContent = '⏳ Загрузка из report.txt...';
+                try {
+                    if (backendAvailable) {
+                        const resp = await fetch('/api/load_pvn_sample', {
+                            method: 'POST',
+                            headers: { 'Content-Type': 'application/json' },
+                            body: JSON.stringify({ limit: 12, offset: observationsState.length })
+                        });
+                        const data = await resp.json();
+                        if (data.ok) {
+                            observationsState = data.observations;
+                            analyticsState = data.analytics;
+                            updateAllVisuals();
+                        }
+                    } else {
+                        const sampleLines = [
+                            ["09:35", "09-35 Ермекеевский район н.п. Рятамак в сторону Белебей"],
+                            ["09:38", "09-38 Ермекеевский район н.п. Елань-Чишма в сторону Туймазов"],
+                            ["09:39", "09-39 Ермекеевский район н.п. Талды Булак в сторону Приютово"],
+                            ["09:42", "09:42 в сторону Стерлитамака пролетел один БПЛА. Видели с Туймазинского района с.Кальшали."],
+                            ["09:44", "09:44 один БПЛА самолетного типа в сторону Уфы видели в с.Метевбаш"],
+                            ["09:45", "9.45 С. Баженово, Белебеевский район, сильный звук, пролетел быстро в сторону Белебея"],
+                            ["09:50", "09.50. Буздякский район с. Канлы-Туркеево в сторону Уфы, самолетного типа"],
+                            ["09:52", "По сообщению жителя пролетел над Иршат в сторону Раевки. 09.52. высота 300."]
+                        ];
+                        for (const [tm, txt] of sampleLines) {
+                            const r = await analyzeInBrowserByMethod(txt, "", tm, "", "method_2_morph");
+                            if (r.ok) observationsState.push(r.observation);
+                        }
+                        analyticsState = computeAnalyticsInBrowser(observationsState, targetsState);
+                        updateAllVisuals();
+                    }
+                } finally {
+                    loadBatchBtn.disabled = false;
+                    loadBatchBtn.textContent = '📂 Загрузить пакет (12 сводок из ПВН)';
+                }
+            });
+        }
+
+        document.getElementById('toggleTrackChk').addEventListener('change', (e) => {
+            if (e.target.checked) {
+                map.addLayer(trackLayer);
+            } else {
+                map.removeLayer(trackLayer);
+            }
+        });
+
+        // Диагностика Ollama
+        document.getElementById('ollamaDiagBtn').addEventListener('click', () => {
+            const box = document.getElementById('diagBox');
+            box.style.display = (box.style.display === 'block') ? 'none' : 'block';
+            checkStatusAndInit();
+        });
+        document.getElementById('closeDiagBtn').addEventListener('click', () => {
+            document.getElementById('diagBox').style.display = 'none';
+        });
+        document.getElementById('closeCompareBtn').addEventListener('click', () => {
+            document.getElementById('compareBox').style.display = 'none';
+        });
+
+        document.getElementById('autoPullBtn').addEventListener('click', async () => {
+            const btn = document.getElementById('autoPullBtn');
+            const msgEl = document.getElementById('diagStatusMessage');
+            btn.disabled = true;
+            btn.textContent = '⏳ Скачивание модели qwen2.5:3b...';
+            try {
+                if (backendAvailable) {
+                    const resp = await fetch('/api/ollama_pull', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({ model: 'qwen2.5:3b' })
+                    });
+                    const data = await resp.json();
+                    msgEl.innerHTML = `<b>${escapeHtml(data.message)}</b>`;
+                } else {
+                    const resp = await fetch('http://localhost:11434/api/pull', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({ name: 'qwen2.5:3b', stream: false })
+                    });
+                    if (resp.ok) msgEl.innerHTML = '<b style="color:#4ade80;">Модель qwen2.5:3b скачана!</b>';
+                }
+                await checkStatusAndInit();
+            } catch (e) {
+                msgEl.innerHTML = `<span style="color:#fca5a5;">Запустите программу Ollama и откройте проект через <code>start_windows.bat</code>.</span>`;
+            } finally {
+                btn.disabled = false;
+                btn.textContent = '⬇️ Скачать русскую модель qwen2.5:3b автоматически';
+            }
+        });
+
+        function createUavIcon() {
+            return L.divIcon({
+                className: 'uav-marker-icon',
+                html: '<div class="uav-pin"></div>',
+                iconSize: [22, 22],
+                iconAnchor: [11, 11],
+                popupAnchor: [0, -11]
+            });
+        }
+
+        function createTargetIcon() {
+            return L.divIcon({
+                className: 'uav-marker-icon',
+                html: '<div class="target-pin">🎯</div>',
+                iconSize: [26, 26],
+                iconAnchor: [13, 13],
+                popupAnchor: [0, -13]
+            });
+        }
+
+        function createForecastIcon(text) {
+            return L.divIcon({
+                className: 'uav-marker-icon',
+                html: `<div class="forecast-pin">${escapeHtml(text)}</div>`,
+                iconSize: [110, 22],
+                iconAnchor: [55, 11]
+            });
+        }
+
+        function escapeHtml(str) {
+            return String(str || '')
+                .replace(/&/g, '&amp;')
+                .replace(/</g, '&lt;')
+                .replace(/>/g, '&gt;')
+                .replace(/"/g, '&quot;');
+        }
+
+        // =========================================================================
+        // Математика трека, прогноза (+15/+30 мин) и оценки угрозы целям в браузере
+        // =========================================================================
+        function parseHhMmToMinutes(tStr) {
+            const m = String(tStr || '').trim().match(/^([01]?\d|2[0-3])[:.]([0-5]\d)$/);
+            return m ? (parseInt(m[1], 10) * 60 + parseInt(m[2], 10)) : null;
+        }
+
+        function angleDiffDeg(a1, a2) {
+            const d = Math.abs((a1 - a2) % 360);
+            return d > 180 ? 360 - d : d;
+        }
+
+        function computeAnalyticsInBrowser(obsList, targList) {
+            const indexed = obsList.map((o, idx) => {
+                const mins = parseHhMmToMinutes(o.time);
+                return { mins: mins !== null ? mins : 9999 + idx, idx, o };
+            });
+            indexed.sort((a, b) => (a.mins - b.mins) || (a.idx - b.idx));
+            const ordered = indexed.map(x => x.o);
+
+            const track = {
+                has_track: ordered.length >= 2,
+                points_count: ordered.length,
+                points: ordered.map(o => [parseFloat(o.lat), parseFloat(o.lon)]),
+                segments: [],
+                total_distance_km: 0,
+                estimated_speed_kmh: 120.0,
+                speed_source: 'крейсерская по умолчанию (120 км/ч)',
+                current_bearing_deg: null,
+                forecast_15m: null,
+                forecast_30m: null
+            };
+
+            let totalDist = 0;
+            let lastBearing = null;
+            let lastSpeed = null;
+
+            for (let i = 0; i < ordered.length - 1; i++) {
+                const p1 = ordered[i], p2 = ordered[i + 1];
+                const dKm = calcHaversineKm(p1.lat, p1.lon, p2.lat, p2.lon);
+                if (dKm < 0.05) continue;
+                const br = calcBearingDeg(p1.lat, p1.lon, p2.lat, p2.lon);
+                const t1 = parseHhMmToMinutes(p1.time), t2 = parseHhMmToMinutes(p2.time);
+                const dtMin = (t1 !== null && t2 !== null && t2 > t1) ? (t2 - t1) : null;
+                const segSpeed = (dtMin && dtMin > 0) ? Math.round((dKm / (dtMin / 60)) * 10) / 10 : null;
+                if (segSpeed && segSpeed >= 20 && segSpeed <= 600) lastSpeed = segSpeed;
+                totalDist += dKm;
+                lastBearing = br;
+                track.segments.push({
+                    from_name: p1.settlement_full,
+                    to_name: p2.settlement_full,
+                    distance_km: Math.round(dKm * 10) / 10,
+                    dt_minutes: dtMin,
+                    speed_kmh: segSpeed,
+                    bearing_deg: Math.round(br)
+                });
+            }
+
+            track.total_distance_km = Math.round(totalDist * 10) / 10;
+            if (lastSpeed !== null) {
+                track.estimated_speed_kmh = lastSpeed;
+                track.speed_source = 'рассчитана по времени между точками';
+            }
+
+            let activeLat = null, activeLon = null, activeBearing = null;
+            if (ordered.length >= 1) {
+                const lastObs = ordered[ordered.length - 1];
+                activeLat = parseFloat(lastObs.lat);
+                activeLon = parseFloat(lastObs.lon);
+                if (lastObs.vector && lastObs.vector.has_vector && lastObs.vector.bearing_deg !== undefined) {
+                    activeBearing = parseFloat(lastObs.vector.bearing_deg);
+                } else if (lastBearing !== null) {
+                    activeBearing = lastBearing;
+                }
+            }
+
+            const spd = track.estimated_speed_kmh;
+            if (activeLat !== null && activeBearing !== null) {
+                track.current_bearing_deg = Math.round(activeBearing);
+                const d15 = spd * 0.25, d30 = spd * 0.50;
+                const f15 = projectPointBrowser(activeLat, activeLon, activeBearing, d15);
+                const f30 = projectPointBrowser(activeLat, activeLon, activeBearing, d30);
+                track.forecast_15m = { lat: f15[0], lon: f15[1], distance_km: Math.round(d15), label: `+15 мин (~${Math.round(d15)} км)` };
+                track.forecast_30m = { lat: f30[0], lon: f30[1], distance_km: Math.round(d30), label: `+30 мин (~${Math.round(d30)} км)` };
+            }
+
+            const targets_analysis = targList.map(t => {
+                const item = {
+                    id: t.id,
+                    name: t.name,
+                    lat: parseFloat(t.lat),
+                    lon: parseFloat(t.lon),
+                    distance_km: null,
+                    angle_deviation_deg: null,
+                    probability_pct: 0,
+                    eta_minutes: null,
+                    risk_level: 'low'
+                };
+                if (activeLat !== null && activeLon !== null) {
+                    const distToT = calcHaversineKm(activeLat, activeLon, item.lat, item.lon);
+                    const brToT = calcBearingDeg(activeLat, activeLon, item.lat, item.lon);
+                    item.distance_km = Math.round(distToT * 10) / 10;
+                    item.eta_minutes = Math.max(1, Math.round((distToT / Math.max(spd, 30)) * 60));
+                    if (activeBearing !== null) {
+                        const dev = angleDiffDeg(activeBearing, brToT);
+                        item.angle_deviation_deg = Math.round(dev);
+                        if (dev <= 90) {
+                            const af = Math.cos(dev * Math.PI / 180) ** 2;
+                            const df = Math.max(0.35, 1.0 - (distToT / 450.0));
+                            item.probability_pct = Math.min(98, Math.max(5, Math.round(af * df * 98)));
+                        } else {
+                            item.probability_pct = Math.max(2, Math.round((180 - dev) / 90 * 12));
+                        }
+                    } else {
+                        item.probability_pct = Math.max(10, Math.min(75, Math.round(100 / (1 + distToT / 40))));
+                    }
+                    item.risk_level = item.probability_pct >= 65 ? 'high' : (item.probability_pct >= 35 ? 'medium' : 'low');
+                }
+                return item;
+            });
+
+            targets_analysis.sort((a, b) => b.probability_pct - a.probability_pct);
+            return { track, targets_analysis };
+        }
+
+        // =========================================================================
+        // Отрисовка карты: точки 112, единый трек + прогноз (+15/+30 мин), цели оператора
+        // =========================================================================
+        function updateAllVisuals(flyToObsId = null) {
+            if (!analyticsState) {
+                analyticsState = computeAnalyticsInBrowser(observationsState, targetsState);
+            }
+
+            markersLayer.clearLayers();
+            trackLayer.clearLayers();
+            targetsLayer.clearLayers();
+
+            let targetMarker = null;
+            let targetCoords = null;
+
+            // 1. Точки сообщений 112 и их локальные векторы
+            observationsState.forEach(obs => {
+                const lat = parseFloat(obs.lat);
+                const lon = parseFloat(obs.lon);
+                if (isNaN(lat) || isNaN(lon)) return;
+
+                const vectorHtml = (obs.vector && obs.vector.has_vector)
+                    ? `<div class="popup-field">
+                         <span class="popup-label">Вектор из сообщения:</span>
+                         <strong style="color: #fcd34d;">${escapeHtml(obs.vector.description)}</strong>
+                       </div>`
+                    : '';
+
+                const popupHtml = `
+                    <div class="popup-card">
+                        <div class="popup-header">
+                            <span class="popup-title">${escapeHtml(obs.settlement_full || obs.settlement_clean)}</span>
+                            <span class="popup-time">🕒 ${escapeHtml(obs.time)}</span>
+                        </div>
+                        <div class="popup-field">
+                            <span class="popup-label">Муниципальный район:</span>
+                            <strong style="color: #93c5fd;">${escapeHtml(obs.district || 'Республика Башкортостан')}</strong>
+                        </div>
+                        <div class="popup-field">
+                            <span class="popup-label">Текст сообщения 112:</span>
+                            <div class="popup-msg-box">${escapeHtml(obs.raw_text)}</div>
+                        </div>
+                        ${vectorHtml}
+                        <div class="popup-coords">
+                            Координаты: ${lat.toFixed(5)}, ${lon.toFixed(5)}<br/>
+                            ${escapeHtml(obs.engine || '')}
+                        </div>
+                    </div>
+                `;
+
+                const marker = L.marker([lat, lon], { icon: createUavIcon() })
+                    .addTo(markersLayer)
+                    .bindPopup(popupHtml);
+
+                if (obs.vector && obs.vector.has_vector) {
+                    const vLat = parseFloat(obs.vector.arrow_end_lat);
+                    const vLon = parseFloat(obs.vector.arrow_end_lon);
+                    if (!isNaN(vLat) && !isNaN(vLon)) {
+                        L.polyline([[lat, lon], [vLat, vLon]], {
+                            color: '#f59e0b',
+                            weight: 3,
+                            dashArray: '7, 6',
+                            opacity: 0.9
+                        }).addTo(markersLayer);
+
+                        L.circleMarker([vLat, vLon], {
+                            radius: 4,
+                            color: '#f59e0b',
+                            fillColor: '#fcd34d',
+                            fillOpacity: 1
+                        }).addTo(markersLayer)
+                          .bindTooltip(`Вектор: ${obs.vector.description}`);
+                    }
+                }
+
+                if (flyToObsId && String(obs.id) === String(flyToObsId)) {
+                    targetMarker = marker;
+                    targetCoords = [lat, lon];
+                }
+            });
+
+            // 2. Единый маршрут (Трек пролёта) и прогноз +15 / +30 мин
+            const tr = analyticsState.track;
+            if (tr && tr.points && tr.points.length >= 2) {
+                L.polyline(tr.points, {
+                    color: '#38bdf8',
+                    weight: 4,
+                    opacity: 0.9
+                }).addTo(trackLayer).bindTooltip(`Единый трек пролёта (${tr.total_distance_km} км, ~${tr.estimated_speed_kmh} км/ч)`);
+            }
+
+            if (tr && tr.points && tr.points.length >= 1 && tr.forecast_15m && tr.forecast_30m) {
+                const lastPt = tr.points[tr.points.length - 1];
+                const f15 = [tr.forecast_15m.lat, tr.forecast_15m.lon];
+                const f30 = [tr.forecast_30m.lat, tr.forecast_30m.lon];
+
+                L.polyline([lastPt, f15, f30], {
+                    color: '#22c55e',
+                    weight: 2.5,
+                    dashArray: '4, 6',
+                    opacity: 0.9
+                }).addTo(trackLayer);
+
+                L.marker(f15, { icon: createForecastIcon(tr.forecast_15m.label) }).addTo(trackLayer);
+                L.marker(f30, { icon: createForecastIcon(tr.forecast_30m.label) }).addTo(trackLayer);
+            }
+
+            // 3. Охраняемые объекты (цели оператора) и линия угрозы к наиболее вероятной цели
+            const tAnalysis = analyticsState.targets_analysis || [];
+            tAnalysis.forEach((t, idx) => {
+                const tPopup = `
+                    <div class="popup-card">
+                        <div class="popup-header">
+                            <span class="popup-title">🎯 ${escapeHtml(t.name)}</span>
+                            <span class="popup-time" style="background:#0284c7;">Вероятность: ${t.probability_pct}%</span>
+                        </div>
+                        <div class="popup-field">
+                            <b>Дистанция от БПЛА:</b> ${t.distance_km !== null ? t.distance_km + ' км' : 'нет данных'}<br/>
+                            <b>Отклонение курса:</b> ${t.angle_deviation_deg !== null ? t.angle_deviation_deg + '°' : '—'}<br/>
+                            <b>Подлётное время (ETA):</b> ${t.eta_minutes !== null ? '~' + t.eta_minutes + ' мин' : '—'}
+                        </div>
+                        <div class="popup-coords">Координаты цели: ${t.lat.toFixed(5)}, ${t.lon.toFixed(5)}</div>
+                    </div>
+                `;
+                L.marker([t.lat, t.lon], { icon: createTargetIcon() })
+                    .addTo(targetsLayer)
+                    .bindPopup(tPopup);
+
+                // Если это наиболее угрожаемая цель (первая в списке с вероятностью >= 35%), соединяем тонким красным пунктиром
+                if (idx === 0 && t.probability_pct >= 35 && tr && tr.points && tr.points.length >= 1) {
+                    const lastPt = tr.points[tr.points.length - 1];
+                    L.polyline([lastPt, [t.lat, t.lon]], {
+                        color: '#ef4444',
+                        weight: 2,
+                        dashArray: '3, 8',
+                        opacity: 0.75
+                    }).addTo(targetsLayer).bindTooltip(`Угроза цели «${t.name}»: ${t.probability_pct}% (подлёт ~${t.eta_minutes} мин)`);
+                }
+            });
+
+            renderTrackSummaryBox(tr);
+            renderTargetsSidebar(tAnalysis);
+            refreshEventsSidebar();
+
+            if (targetMarker && targetCoords) {
+                map.flyTo(targetCoords, 10, { duration: 1.0 });
+                setTimeout(() => targetMarker.openPopup(), 550);
+            }
+        }
+
+        function renderTrackSummaryBox(tr) {
+            const box = document.getElementById('trackSummaryBox');
+            if (!tr || tr.points_count === 0) {
+                box.innerHTML = 'Добавьте сообщения 112, чтобы построить маршрут, рассчитать путевую скорость (км/ч) и прогноз положения (+15 / +30 мин).';
+                return;
+            }
+            if (tr.points_count === 1) {
+                box.innerHTML = `
+                    <div class="track-metric-row"><span>Точек в маршруте:</span><b>1 (начальная фиксация)</b></div>
+                    <div class="track-metric-row"><span>Скорость для прогноза:</span><b>${tr.estimated_speed_kmh} км/ч (по умолчанию)</b></div>
+                    <div class="track-metric-row"><span>Текущий курс (азимут):</span><b>${tr.current_bearing_deg !== null ? tr.current_bearing_deg + '°' : 'ожидание 2-й точки'}</b></div>
+                    <div style="color:#86efac;margin-top:3px;font-size:11px;">Добавьте вторую точку с более поздним временем — система вычислит реальную скорость БПЛА!</div>
+                `;
+                return;
+            }
+
+            const lastSeg = tr.segments[tr.segments.length - 1] || {};
+            box.innerHTML = `
+                <div class="track-metric-row"><span>Связано точек в треке:</span><b style="color:#38bdf8;">${tr.points_count} шт. (${tr.total_distance_km} км)</b></div>
+                <div class="track-metric-row"><span>Расчётная скорость БПЛА:</span><b style="color:#4ade80;">${tr.estimated_speed_kmh} км/ч (${escapeHtml(tr.speed_source)})</b></div>
+                <div class="track-metric-row"><span>Текущий курс пролёта:</span><b>азимут ${tr.current_bearing_deg !== null ? tr.current_bearing_deg + '°' : '—'}</b></div>
+                ${tr.forecast_15m ? `<div class="track-metric-row"><span>Прогноз +15 / +30 мин:</span><b style="color:#86efac;">+${tr.forecast_15m.distance_km} км / +${tr.forecast_30m.distance_km} км по курсу</b></div>` : ''}
+            `;
+        }
+
+        function renderTargetsSidebar(tAnalysis) {
+            const countEl = document.getElementById('targetsCount');
+            const listEl = document.getElementById('targetsList');
+            countEl.textContent = tAnalysis.length;
+            listEl.innerHTML = '';
+
+            if (tAnalysis.length === 0) {
+                listEl.innerHTML = '<div style="font-size:11.5px;color:var(--text-muted);text-align:center;padding:6px 0;">Цели не заданы. Нажмите «📍 Кликнуть точку цели на карте» или «+ 3 цели РБ».</div>';
+                return;
+            }
+
+            tAnalysis.forEach(t => {
+                const card = document.createElement('div');
+                card.className = `target-card risk-${t.risk_level}`;
+                const badgeClass = t.risk_level === 'high' ? 'prob-high' : (t.risk_level === 'medium' ? 'prob-medium' : 'prob-low');
+                const barColor = t.risk_level === 'high' ? '#ef4444' : (t.risk_level === 'medium' ? '#f59e0b' : '#22c55e');
+
+                const detailsText = t.distance_km !== null
+                    ? `До цели: <b>${t.distance_km} км</b> | Отклонение курса: <b>${t.angle_deviation_deg !== null ? t.angle_deviation_deg + '°' : '—'}</b> | Подлёт: <b>~${t.eta_minutes} мин</b>`
+                    : `Координаты: ${t.lat.toFixed(4)}, ${t.lon.toFixed(4)} (ожидание точек БПЛА)`;
+
+                card.innerHTML = `
+                    <div class="target-top">
+                        <span class="target-name" data-lat="${t.lat}" data-lon="${t.lon}">🎯 ${escapeHtml(t.name)}</span>
+                        <div style="display:flex;align-items:center;gap:5px;">
+                            <span class="prob-badge ${badgeClass}">Угроза: ${t.probability_pct}%</span>
+                            <button type="button" class="btn-clear del-target-btn" data-id="${t.id}" title="Удалить цель">✕</button>
+                        </div>
+                    </div>
+                    <div class="prob-bar-bg">
+                        <div class="prob-bar-fill" style="width:${t.probability_pct}%;background:${barColor};"></div>
+                    </div>
+                    <div style="font-size:11px;color:#cbd5e1;">${detailsText}</div>
+                `;
+
+                card.querySelector('.target-name').addEventListener('click', () => {
+                    map.flyTo([t.lat, t.lon], 10, { duration: 0.9 });
+                });
+                card.querySelector('.del-target-btn').addEventListener('click', () => deleteTarget(t.id));
+                listEl.appendChild(card);
+            });
+        }
+
+        function refreshEventsSidebar() {
+            const listEl = document.getElementById('eventsList');
+            const countEl = document.getElementById('eventsCount');
+            countEl.textContent = observationsState.length;
+            listEl.innerHTML = '';
+
+            if (observationsState.length === 0) {
+                listEl.innerHTML = '<div style="font-size: 11.5px; color: var(--text-muted); text-align: center; padding: 10px 0;">Точек пока нет.</div>';
+                return;
+            }
+
+            observationsState.slice().reverse().forEach(obs => {
+                const item = document.createElement('div');
+                item.className = 'event-item';
+                const vecTag = (obs.vector && obs.vector.has_vector)
+                    ? `<div class="event-vector-tag">➤ ${escapeHtml(obs.vector.description)}</div>`
+                    : '';
+
+                item.innerHTML = `
+                    <div class="event-item-top">
+                        <span class="event-place">${escapeHtml(obs.settlement_full)}</span>
+                        <span class="event-time-badge">🕒 ${escapeHtml(obs.time)}</span>
+                    </div>
+                    <div class="event-district">📍 ${escapeHtml(obs.district)}</div>
+                    <div class="event-text">${escapeHtml(obs.raw_text)}</div>
+                    ${vecTag}
+                `;
+                item.addEventListener('click', () => {
+                    updateAllVisuals(obs.id);
+                    renderDisambiguationPanel(obs);
+                });
+                listEl.appendChild(item);
+            });
+        }
+
+        // =========================================================================
+        // Управление охраняемыми объектами (добавление кликом по карте или по НП)
+        // =========================================================================
+        const pickBtn = document.getElementById('pickTargetOnMapBtn');
+        const pickBanner = document.getElementById('mapPickBanner');
+
+        function setPickMode(enabled) {
+            isPickingTargetOnMap = enabled;
+            if (enabled) {
+                pickBtn.classList.add('active-pick');
+                pickBtn.textContent = '🎯 Кликните на карту (Отмена)';
+                pickBanner.style.display = 'block';
+                document.getElementById('map').style.cursor = 'crosshair';
+            } else {
+                pickBtn.classList.remove('active-pick');
+                pickBtn.textContent = '📍 Кликнуть точку цели на карте';
+                pickBanner.style.display = 'none';
+                document.getElementById('map').style.cursor = '';
+            }
+        }
+
+        pickBtn.addEventListener('click', () => setPickMode(!isPickingTargetOnMap));
+        window.addEventListener('keydown', (e) => {
+            if (e.key === 'Escape' && isPickingTargetOnMap) setPickMode(false);
+        });
+
+        map.on('click', async (e) => {
+            if (!isPickingTargetOnMap) return;
+            const lat = e.latlng.lat;
+            const lon = e.latlng.lng;
+            const nameInput = document.getElementById('targetNameInput');
+            const customName = nameInput.value.trim() || `Охраняемый объект №${targetsState.length + 1}`;
+            setPickMode(false);
+            await addTarget({ name: customName, lat, lon });
+            nameInput.value = '';
+        });
+
+        document.getElementById('addTargetByNameBtn').addEventListener('click', async () => {
+            const nameInput = document.getElementById('targetNameInput');
+            const settInput = document.getElementById('targetSettlementInput');
+            const errorBanner = document.getElementById('errorBanner');
+            errorBanner.style.display = 'none';
+
+            const settName = settInput.value.trim();
+            if (!settName) {
+                errorBanner.textContent = 'Введите название города/села для охраняемого объекта или нажмите «Кликнуть точку цели на карте».';
+                errorBanner.style.display = 'block';
+                return;
+            }
+            const customName = nameInput.value.trim() || `Объект (${settName})`;
+            await addTarget({ name: customName, settlement: settName });
+            nameInput.value = '';
+            settInput.value = '';
+        });
+
+        document.getElementById('presetTargetsBtn').addEventListener('click', async () => {
+            if (backendAvailable) {
+                const resp = await fetch('/api/preset_targets', { method: 'POST' });
+                const data = await resp.json();
+                if (data.ok) {
+                    targetsState = data.targets;
+                    analyticsState = data.analytics;
+                    updateAllVisuals();
+                    return;
+                }
+            }
+            targetsState = [
+                { id: 101, name: 'Цель №1 (Уфимский узел)', lat: 54.735598, lon: 55.957605 },
+                { id: 102, name: 'Цель №2 (Салават / Стерлитамак)', lat: 53.362823, lon: 55.915437 },
+                { id: 103, name: 'Цель №3 (Северо-Запад / Нефтекамск)', lat: 56.088375, lon: 54.248241 }
+            ];
+            analyticsState = computeAnalyticsInBrowser(observationsState, targetsState);
+            updateAllVisuals();
+        });
+
+        document.getElementById('clearTargetsBtn').addEventListener('click', () => deleteTarget('all'));
+
+        async function addTarget(payload) {
+            const errorBanner = document.getElementById('errorBanner');
+            errorBanner.style.display = 'none';
+
+            if (backendAvailable) {
+                const resp = await fetch('/api/add_target', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(payload)
+                });
+                const data = await resp.json();
+                if (!data.ok) {
+                    errorBanner.textContent = data.error || 'Не удалось добавить объект.';
+                    errorBanner.style.display = 'block';
+                    return;
+                }
+                targetsState = data.targets;
+                analyticsState = data.analytics;
+                updateAllVisuals();
+                return;
+            }
+
+            let lat = payload.lat, lon = payload.lon;
+            if (payload.settlement && (lat === undefined || lon === undefined)) {
+                const found = findCandidatesBrowser(payload.settlement).best;
+                if (!found) {
+                    errorBanner.textContent = `Населённый пункт «${payload.settlement}» не найден.`;
+                    errorBanner.style.display = 'block';
+                    return;
+                }
+                lat = found.la;
+                lon = found.lo;
+            }
+            targetsState.push({
+                id: Date.now(),
+                name: payload.name || 'Охраняемый объект',
+                lat: parseFloat(lat),
+                lon: parseFloat(lon)
+            });
+            analyticsState = computeAnalyticsInBrowser(observationsState, targetsState);
+            updateAllVisuals();
+        }
+
+        async function deleteTarget(id) {
+            if (backendAvailable) {
+                const resp = await fetch('/api/delete_target', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ id })
+                });
+                const data = await resp.json();
+                if (data.ok) {
+                    targetsState = data.targets;
+                    analyticsState = data.analytics;
+                    updateAllVisuals();
+                    return;
+                }
+            }
+            if (id === 'all') {
+                targetsState = [];
+            } else {
+                targetsState = targetsState.filter(t => String(t.id) !== String(id));
+            }
+            analyticsState = computeAnalyticsInBrowser(observationsState, targetsState);
+            updateAllVisuals();
+        }
+
+        // =========================================================================
+        // Одноимённые посёлки в разных районах
+        // =========================================================================
+        function renderDisambiguationPanel(obs) {
+            const box = document.getElementById('disambigBox');
+            const titleEl = document.getElementById('disambigTitle');
+            const chipsEl = document.getElementById('disambigChips');
+
+            const alts = obs.alternatives || [];
+            if (alts.length <= 1) {
+                box.style.display = 'none';
+                return;
+            }
+
+            box.style.display = 'block';
+            if (obs.is_ambiguous) {
+                titleEl.innerHTML = `⚠️ Найдено <u>${obs.total_homonyms || alts.length}</u> одноимённых НП «${escapeHtml(obs.settlement_clean)}» в разных районах! Кликните нужный район:`;
+            } else {
+                titleEl.innerHTML = `📍 Выбран район: <u>${escapeHtml(obs.district.replace(' муниципальный район', ''))}</u>. Другие одноимённые НП «${escapeHtml(obs.settlement_clean)}»:`;
+            }
+
+            chipsEl.innerHTML = '';
+            alts.forEach(alt => {
+                const btn = document.createElement('button');
+                btn.type = 'button';
+                const isCurrent = String(alt.id) === String(obs.settlement_id) || (alt.lat === obs.lat && alt.lon === obs.lon);
+                btn.className = 'disambig-chip' + (isCurrent ? ' active' : '');
+                const shortDist = (alt.district || '').replace(' муниципальный район', ' р-н');
+                btn.textContent = `${alt.full_name} — ${shortDist}`;
+                btn.addEventListener('click', () => switchObservationDistrict(obs.id, alt));
+                chipsEl.appendChild(btn);
+            });
+        }
+
+        async function switchObservationDistrict(obsId, altRecord) {
+            if (backendAvailable) {
+                try {
+                    const resp = await fetch('/api/switch_district', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({ obs_id: obsId, settlement_id: altRecord.id })
+                    });
+                    const data = await resp.json();
+                    if (data.ok) {
+                        observationsState = data.observations;
+                        analyticsState = data.analytics;
+                        updateAllVisuals(obsId);
+                        renderDisambiguationPanel(data.observation);
+                        return;
+                    }
+                } catch (e) {}
+            }
+
+            const obs = observationsState.find(o => String(o.id) === String(obsId));
+            if (!obs) return;
+            obs.settlement_id = altRecord.id;
+            obs.settlement_full = altRecord.full_name;
+            obs.district = altRecord.district;
+            obs.lat = altRecord.lat;
+            obs.lon = altRecord.lon;
+            obs.is_ambiguous = false;
+
+            if (obs.vector && obs.vector.target_lat && obs.vector.target_lon && obs.vector.mode === 'target_settlement') {
+                const br = calcBearingDeg(obs.lat, obs.lon, obs.vector.target_lat, obs.vector.target_lon);
+                const distKm = calcHaversineKm(obs.lat, obs.lon, obs.vector.target_lat, obs.vector.target_lon);
+                const endPt = projectPointBrowser(obs.lat, obs.lon, br, Math.min(Math.max(distKm * 0.45, 12), 35));
+                obs.vector.bearing_deg = Math.round(br);
+                obs.vector.arrow_end_lat = endPt[0];
+                obs.vector.arrow_end_lon = endPt[1];
+                obs.vector.description = `В сторону: ${obs.vector.target_name} (азимут ${Math.round(br)}°, ~${Math.round(distKm)} км)`;
+            }
+
+            analyticsState = computeAnalyticsInBrowser(observationsState, targetsState);
+            updateAllVisuals(obsId);
+            renderDisambiguationPanel(obs);
+        }
+
+        // =========================================================================
+        // 3 метода распознавания в браузере (для статического режима / GitHub Pages)
+        // =========================================================================
+        const COMPASS_MAP = {
+            'север': 0, 'северо-восток': 45, 'восток': 90, 'юго-восток': 135,
+            'юг': 180, 'юго-запад': 225, 'запад': 270, 'северо-запад': 315
+        };
+
+        const STOPWORDS_SET = new Set([
+            'житель', 'жители', 'сообщает', 'сообщил', 'сообщила', 'сообщают', 'звонок',
+            'видел', 'видели', 'вижу', 'заметил', 'заметили', 'пролетел', 'летит', 'полетел',
+            'сторону', 'стороны', 'направлению', 'направляется', 'около', 'возле', 'районе',
+            'район', 'района', 'деревня', 'деревни', 'деревне', 'деревней', 'село', 'села',
+            'селе', 'селом', 'поселок', 'поселка', 'поселке', 'город', 'города', 'городом',
+            'хутор', 'хутора', 'беспилотник', 'дрон', 'бпла', 'птица', 'птицу', 'объект',
+            'воздушный', 'небе', 'низко', 'высоко', 'быстро', 'звук', 'мотора', 'слышно'
+        ]);
+
+        function normTextBrowser(s) {
+            return String(s || '').toLowerCase().replace(/ё/g, 'е').replace(/[^а-яa-z0-9\-\s]/g, ' ').replace(/\s+/g, ' ').trim();
+        }
+
+        function cleanSettlementBrowser(raw) {
+            let s = String(raw || '').replace(/\(.*?\)/g, ' ').trim().toLowerCase().replace(/ё/g, 'е');
+            s = s.replace(/^(рабочий поселок|деревня станции|деревня разъезда|село станции|поселок станции|деревня|село|хутор|посёлок|поселок|кордон|город|пгт\.?|р\.?п\.?|пос\.|дер\.|г\.|с\.|д\.|п\.|х\.)\s*/i, '').trim();
+            s = s.replace(/\s+(муниципальный\s+)?(район|р-н).*$/i, '').trim();
+            return normTextBrowser(s);
+        }
+
+        function extractDistStemBrowser(dStr) {
+            let s = normTextBrowser(dStr).replace(/(муниципальный|муниципального|муниципальном|район|района|районе|р-н|р-на|р-не|городской|округ|город)/g, ' ').trim();
+            if (!s) return '';
+            const fw = s.split(' ')[0];
+            const st = fw.replace(/(ий|ый|ой|ого|его|ому|ему|им|ым|ом|ем|ая|яя|ое|ее)$/, '');
+            return st.length >= 3 ? st : fw;
+        }
+
+        function calcHaversineKm(lat1, lon1, lat2, lon2) {
+            const R = 6371.0;
+            const p1 = lat1 * Math.PI / 180, p2 = lat2 * Math.PI / 180;
+            const dp = (lat2 - lat1) * Math.PI / 180, dl = (lon2 - lon1) * Math.PI / 180;
+            const a = Math.sin(dp/2)**2 + Math.cos(p1)*Math.cos(p2)*Math.sin(dl/2)**2;
+            return 2 * R * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+        }
+
+        function calcBearingDeg(lat1, lon1, lat2, lon2) {
+            const p1 = lat1 * Math.PI / 180, p2 = lat2 * Math.PI / 180;
+            const dl = (lon2 - lon1) * Math.PI / 180;
+            const x = Math.sin(dl) * Math.cos(p2);
+            const y = Math.cos(p1) * Math.sin(p2) - Math.sin(p1) * Math.cos(p2) * Math.cos(dl);
+            return (Math.atan2(x, y) * 180 / Math.PI + 360) % 360;
+        }
+
+        function projectPointBrowser(lat, lon, brDeg, distKm) {
+            const R = 6371.0, ad = distKm / R, br = brDeg * Math.PI / 180;
+            const lat1 = lat * Math.PI / 180, lon1 = lon * Math.PI / 180;
+            const lat2 = Math.asin(Math.sin(lat1)*Math.cos(ad) + Math.cos(lat1)*Math.sin(ad)*Math.cos(br));
+            const lon2 = lon1 + Math.atan2(Math.sin(br)*Math.sin(ad)*Math.cos(lat1), Math.cos(ad) - Math.sin(lat1)*Math.sin(lat2));
+            return [lat2 * 180 / Math.PI, lon2 * 180 / Math.PI];
+        }
+
+        function findCandidatesBrowser(nameNom, distHint = '', refCoords = null) {
+            const data = window.SETTLEMENTS_DATA || [];
+            const q = cleanSettlementBrowser(nameNom);
+            if (!q) return { best: null, all: [], ambiguous: false };
+            const qNoSpace = q.replace(/\s+/g, '');
+            const distStem = extractDistStemBrowser(distHint);
+
+            let cands = data.filter(r => r.c === q || r.n === qNoSpace);
+            if (cands.length === 0 && qNoSpace.length >= 3) {
+                const stem = (qNoSpace.length > 5 && /(ово|ево|ино|ыно|ский|цкий|ая|ое|ий|ый)$/.test(qNoSpace))
+                    ? qNoSpace.slice(0, -2)
+                    : (qNoSpace.length >= 4 && /[аяоеиыуьюй]$/.test(qNoSpace) ? qNoSpace.slice(0, -1) : qNoSpace);
+                if (stem.length >= 3) {
+                    cands = data.filter(r => r.n === stem || (r.n.startsWith(stem) && Math.abs(r.n.length - qNoSpace.length) <= 2));
+                }
+            }
+            if (cands.length === 0) return { best: null, all: [], ambiguous: false };
+            if (cands.length === 1) return { best: cands[0], all: cands, ambiguous: false };
+
+            const distMatched = (distStem && distStem.length >= 3)
+                ? cands.filter(c => c.dn.includes(distStem) || (c.ds && c.ds.startsWith(distStem.slice(0, 4))))
+                : [];
+
+            const scored = cands.map(c => {
+                let sc = 0;
+                if (distStem && distStem.length >= 3 && (c.dn.includes(distStem) || (c.ds && c.ds.startsWith(distStem.slice(0, 4))))) sc += 100;
+                if (c.t === 'город') sc += 40;
+                else if (c.t === 'село') sc += 8;
+                if (c.n.length >= 4 && c.dn.startsWith(c.n.slice(0, 4))) sc += 20;
+                if (refCoords) sc -= calcHaversineKm(c.la, c.lo, refCoords[0], refCoords[1]) * 0.05;
+                return { sc, c };
+            });
+
+            scored.sort((a, b) => b.sc - a.sc);
+            const ordered = scored.map(x => x.c);
+            const uniqueDists = new Set(cands.map(x => x.d));
+            const ambiguous = uniqueDists.size > 1 && distMatched.length === 0 && ordered[0].t !== 'город';
+            return { best: ordered[0], all: ordered, ambiguous };
+        }
+
+        function method1BaselineBrowser(text) {
+            const data = window.SETTLEMENTS_DATA || [];
+            const lower = String(text || '').toLowerCase().replace(/ё/g, 'е');
+            const wordsSet = new Set(lower.match(/[а-я0-9\-]+/g) || []);
+            let found = '', bestLen = 0;
+            for (const r of data) {
+                if (r.n.length >= 3 && wordsSet.has(r.n) && r.n.length > bestLen) {
+                    found = r.c;
+                    bestLen = r.n.length;
+                }
+            }
+            return { settlement_seen: found, settlement_type: '', district: '', direction_to: '', direction_compass: '', event_time: '' };
+        }
+
+        function method2MorphBrowser(text) {
+            const data = window.SETTLEMENTS_DATA || [];
+            const distStemsMap = window.DISTRICT_STEMS || {};
+            const lower = String(text || '').toLowerCase().replace(/ё/g, 'е');
+
+            let district = '';
+            const dm = lower.match(/([а-я\-]{3,}?)(?:ского|цкого|ого|его|ском|цком|ом|ем|ский|цкий|ый|ий)\s+(?:муниципального\s+|муниципальный\s+)?(?:район|р-н)/);
+            if (dm) {
+                const st = extractDistStemBrowser(dm[1]);
+                district = distStemsMap[st] || dm[1];
+            } else {
+                const allWords = lower.match(/[а-я\-]{4,}/g) || [];
+                for (const w of allWords) {
+                    if (/(ский|цкий|ского|цкого|ском|цком)$/.test(w)) {
+                        const st = extractDistStemBrowser(w);
+                        if (distStemsMap[st]) { district = distStemsMap[st]; break; }
+                    }
+                }
+            }
+
+            let direction_compass = '';
+            for (const comp of ['северо-восток', 'северо-запад', 'юго-восток', 'юго-запад', 'север', 'восток', 'юг', 'запад']) {
+                if (lower.includes('на ' + comp) || lower.includes('в сторону ' + comp)) { direction_compass = comp; break; }
+            }
+
+            function matchToponym(frag) {
+                const fNorm = normTextBrowser(frag);
+                if (!fNorm) return '';
+                const direct = cleanSettlementBrowser(fNorm);
+                const directNoSpace = direct.replace(/\s+/g, '');
+                for (const r of data) {
+                    if (r.c === direct || r.n === directNoSpace) return r.c;
+                }
+
+                let fWords = (fNorm.match(/[а-я]{3,}/g) || []).filter(w => !STOPWORDS_SET.has(w) && !/(ского|цкого|ском|цком|ский|цкий)$/.test(w));
+                if (fWords.length === 0) fWords = (fNorm.match(/[а-я]{3,}/g) || []).filter(w => !STOPWORDS_SET.has(w));
+
+                let bestName = '', bestScore = 0;
+                for (const r of data) {
+                    const cname = r.c;
+                    if (cname.length < 3) continue;
+                    const cwords = cname.split(/[\s\-]+/).filter(Boolean);
+                    if (cwords.length === 1) {
+                        const w = cwords[0];
+                        if (fWords.includes(w)) {
+                            const sc = w.length * 4 + (r.t === 'город' ? 25 : (r.t === 'село' ? 10 : 0)) + 30;
+                            if (sc > bestScore) { bestScore = sc; bestName = cname; }
+                            continue;
+                        }
+                        const stem = (w.length > 5 && /(ово|ево|ино|ыно|ский|цкий|ая|ое|ий|ый)$/.test(w))
+                            ? w.slice(0, -2)
+                            : (/[аяоеиыуьюй]$/.test(w) ? w.slice(0, -1) : w);
+                        if (stem.length >= 3) {
+                            for (const fw of fWords) {
+                                if (fw.startsWith(stem) && Math.abs(fw.length - stem.length) <= 3) {
+                                    const sc = stem.length * 3 + (r.t === 'город' ? 25 : 0) - Math.abs(fw.length - w.length) * 4;
+                                    if (sc > bestScore) { bestScore = sc; bestName = cname; }
+                                }
+                            }
+                        }
+                    } else {
+                        if (!cwords.some(cw => cw.length >= 4)) continue;
+                        const allTokens = new Set(fNorm.match(/[а-я0-9]+/g) || []);
+                        const okAll = cwords.every(cw => {
+                            if (cw.length < 3) return allTokens.has(cw);
+                            const st = cw.length > 5 ? cw.slice(0, -2) : (/[аяоеиыуьюй]$/.test(cw) ? cw.slice(0, -1) : cw);
+                            return fWords.some(fw => fw.startsWith(st) && Math.abs(fw.length - cw.length) <= 3);
+                        });
+                        if (okAll) {
+                            const sc = cname.length * 5 + 40;
+                            if (sc > bestScore) { bestScore = sc; bestName = cname; }
+                        }
+                    }
+                }
+                return bestName;
+            }
+
+            let direction_to = '', rest = lower;
+            const dirMatch = lower.match(/(?:в\s+сторону|по\s+направлению\s+к|направляется\s+к|летит\s+к|полетел\s+к|полетел\s+на|курс\s+на|летит\s+на)\s+([а-я\-\s.]{3,35}?)(?:[,.;]|$|\s+и\s+|\s+со\s+)/);
+            if (dirMatch) {
+                const candDir = matchToponym(dirMatch[1]);
+                if (candDir) { direction_to = candDir; rest = lower.replace(dirMatch[0], ' '); }
+            }
+
+            const seen = matchToponym(rest);
+            return { settlement_seen: seen, settlement_type: '', district, direction_to, direction_compass, event_time: '' };
+        }
+
+        async function analyzeInBrowserByMethod(text, model, timeVal, districtOverride, methodCode) {
+            const t0 = performance.now();
+            let extracted = null, engineLabel = '';
+
+            if (methodCode === 'method_1_baseline') {
+                extracted = method1BaselineBrowser(text);
+                engineLabel = `Метод 1: Базовый (${(performance.now() - t0).toFixed(1)} мс)`;
+            } else if (methodCode === 'method_2_morph') {
+                extracted = method2MorphBrowser(text);
+                engineLabel = `Метод 2: Морфология + нечёткий поиск (${(performance.now() - t0).toFixed(1)} мс)`;
+            } else {
+                const morphRes = method2MorphBrowser(text);
+                extracted = { ...morphRes };
+                engineLabel = `Метод 3: Гибрид (морфоконтур, ${(performance.now() - t0).toFixed(1)} мс)`;
+                try {
+                    const sysPrompt = 'Ты модуль системы 112 Башкортостана. Извлеки из сообщения данные и верни строго JSON: {"settlement_seen": "название НП в им. падеже без типа", "district": "район в им. падеже", "direction_to": "НП куда летит в им. падеже", "direction_compass": "сторона света"}';
+                    const hint = `Подсказка словаря settlments.csv: НП='${morphRes.settlement_seen}', район='${morphRes.district}', направление='${morphRes.direction_to}'.`;
+                    const resp = await fetch('http://localhost:11434/api/chat', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({
+                            model: model || 'qwen2.5:3b',
+                            messages: [{ role: 'system', content: sysPrompt }, { role: 'user', content: `Сообщение: ${text}
+${hint}` }],
+                            format: 'json',
+                            stream: false,
+                            options: { temperature: 0 }
+                        })
+                    });
+                    if (resp.ok) {
+                        const data = await resp.json();
+                        let rawContent = (data.message && data.message.content) || '{}';
+                        rawContent = rawContent.replace(/<think>[\s\S]*?<\/think>/g, '').trim();
+                        const llmJson = JSON.parse(rawContent);
+                        if (llmJson.settlement_seen && findCandidatesBrowser(llmJson.settlement_seen).best) extracted.settlement_seen = llmJson.settlement_seen;
+                        if (llmJson.direction_to && findCandidatesBrowser(llmJson.direction_to).best) extracted.direction_to = llmJson.direction_to;
+                        if (llmJson.district && extractDistStemBrowser(llmJson.district)) extracted.district = llmJson.district;
+                        engineLabel = `Метод 3: Гибрид Ollama (${model || 'local'}) + ФИАС (${(performance.now() - t0).toFixed(0)} мс)`;
+                    }
+                } catch (e) {}
+            }
+
+            if (districtOverride) extracted.district = districtOverride;
+
+            const targetLookup = extracted.direction_to ? findCandidatesBrowser(extracted.direction_to) : { best: null };
+            const targetRec = targetLookup.best;
+            const refCoords = targetRec ? [targetRec.la, targetRec.lo] : null;
+
+            let seenLookup = findCandidatesBrowser(extracted.settlement_seen, extracted.district, refCoords);
+            if (!seenLookup.best && targetRec) seenLookup = findCandidatesBrowser(extracted.direction_to, extracted.district);
+
+            if (!seenLookup.best) {
+                const msg = (methodCode === 'method_1_baseline')
+                    ? 'Метод 1 (базовый алгоритм руководителя) не смог распознать НП, так как название стоит в косвенном падеже. Переключите на Метод 2 или Метод 3!'
+                    : `Населённый пункт «${extracted.settlement_seen || text}» не найден в справочнике settlments.csv.`;
+                return { ok: false, error: msg };
+            }
+
+            const seenRec = seenLookup.best;
+            let vector = null;
+            if (targetRec && (targetRec.la !== seenRec.la || targetRec.lo !== seenRec.lo)) {
+                const br = calcBearingDeg(seenRec.la, seenRec.lo, targetRec.la, targetRec.lo);
+                const distKm = calcHaversineKm(seenRec.la, seenRec.lo, targetRec.la, targetRec.lo);
+                const endPt = projectPointBrowser(seenRec.la, seenRec.lo, br, Math.min(Math.max(distKm * 0.45, 12), 35));
+                vector = {
+                    has_vector: true,
+                    mode: 'target_settlement',
+                    target_name: targetRec.f,
+                    target_lat: targetRec.la,
+                    target_lon: targetRec.lo,
+                    bearing_deg: Math.round(br),
+                    arrow_end_lat: endPt[0],
+                    arrow_end_lon: endPt[1],
+                    description: `В сторону: ${targetRec.f} (азимут ${Math.round(br)}°, ~${Math.round(distKm)} км)`
+                };
+            } else if (extracted.direction_compass && COMPASS_MAP[extracted.direction_compass] !== undefined) {
+                const br = COMPASS_MAP[extracted.direction_compass];
+                const endPt = projectPointBrowser(seenRec.la, seenRec.lo, br, 22);
+                vector = {
+                    has_vector: true,
+                    mode: 'compass',
+                    target_name: 'на ' + extracted.direction_compass,
+                    bearing_deg: br,
+                    arrow_end_lat: endPt[0],
+                    arrow_end_lon: endPt[1],
+                    description: `Курс: на ${extracted.direction_compass} (азимут ${br}°)`
+                };
+            }
+
+            const alternatives = seenLookup.all.slice(0, 15).map(c => ({
+                id: c.id, full_name: c.f, district: c.d, lat: c.la, lon: c.lo
+            }));
+
+            const timeMatch = text.match(/([01]?\d|2[0-3])[:.]([0-5]\d)/);
+            const finalTime = (timeMatch ? `${String(timeMatch[1]).padStart(2,'0')}:${timeMatch[2]}` : '') || timeVal || '12:00';
+
+            const obs = {
+                id: Date.now() + Math.floor(Math.random() * 1000),
+                settlement_id: seenRec.id,
+                time: finalTime,
+                raw_text: text,
+                lat: seenRec.la,
+                lon: seenRec.lo,
+                settlement_full: seenRec.f,
+                settlement_clean: seenRec.c,
+                district: seenRec.d,
+                vector: vector,
+                llm_extracted: extracted,
+                engine: engineLabel,
+                is_ambiguous: seenLookup.ambiguous,
+                total_homonyms: seenLookup.all.length,
+                alternatives: alternatives
+            };
+            return { ok: true, observation: obs };
+        }
+
+        async function checkStatusAndInit() {
+            const dot = document.getElementById('ollamaDot');
+            const statusText = document.getElementById('ollamaStatusText');
+            const modelSelect = document.getElementById('modelSelect');
+            const diagMsg = document.getElementById('diagStatusMessage');
+
+            if (window.location.protocol === 'file:') {
+                diagMsg.innerHTML = `<span style="color:#fcd34d;">⚠️ Вы открыли <code>index.html</code> напрямую из папки (<code>file://</code>). Запустите <b><code>start_windows.bat</code></b>, чтобы открылся адрес <code>http://localhost:8000</code> и подключилась Ollama!</span>`;
+            }
+
+            try {
+                const resp = await fetch('/api/status');
+                if (resp.ok) {
+                    const data = await resp.json();
+                    backendAvailable = true;
+                    diagMsg.innerHTML = `<b>Статус:</b> ${escapeHtml(data.ollama_message || '')}`;
+
+                    if (data.ollama_ready && data.models && data.models.length > 0) {
+                        dot.className = 'status-dot online';
+                        statusText.textContent = `Ollama активна (${data.models.length})`;
+                        modelSelect.innerHTML = data.models.map(m => `<option value="${escapeHtml(m)}">${escapeHtml(m)}</option>`).join('');
+                    } else if (data.ollama_online && data.ollama_status_code === 'no_models') {
+                        dot.className = 'status-dot';
+                        statusText.textContent = '⚠️ Скачайте модель Ollama';
+                        modelSelect.innerHTML = '<option value="">Нажмите «Скачать модель» выше</option>';
+                    } else {
+                        dot.className = 'status-dot';
+                        statusText.textContent = '🔌 Настроить Ollama';
+                        modelSelect.innerHTML = '<option value="">Активен морфоконтур ФИАС</option>';
+                    }
+
+                    const obsResp = await fetch('/api/observations');
+                    if (obsResp.ok) {
+                        const obsData = await obsResp.json();
+                        observationsState = obsData.observations || [];
+                        targetsState = obsData.targets || [];
+                        analyticsState = obsData.analytics || null;
+                        updateAllVisuals();
+                    }
+                    return;
+                }
+            } catch (e) {
+                backendAvailable = false;
+            }
+
+            try {
+                const r = await fetch('http://localhost:11434/api/tags');
+                if (r.ok) {
+                    const d = await r.json();
+                    const models = (d.models || []).map(m => m.name).filter(Boolean);
+                    if (models.length > 0) {
+                        dot.className = 'status-dot online';
+                        statusText.textContent = `Ollama активна (${models.length})`;
+                        modelSelect.innerHTML = models.map(m => `<option value="${escapeHtml(m)}">${escapeHtml(m)}</option>`).join('');
+                    }
+                    updateAllVisuals();
+                    return;
+                }
+            } catch (e) {}
+
+            dot.className = 'status-dot';
+            statusText.textContent = '🔌 Как подключить Ollama';
+            modelSelect.innerHTML = '<option value="">Активен словарь Башкортостана (4561 НП)</option>';
+            updateAllVisuals();
+        }
+
+        document.getElementById('submitBtn').addEventListener('click', async () => {
+            const textEl = document.getElementById('messageInput');
+            const modelEl = document.getElementById('modelSelect');
+            const modeEl = document.getElementById('modeSelect');
+            const distEl = document.getElementById('districtSelect');
+            const timeEl = document.getElementById('timeInput');
+            const btn = document.getElementById('submitBtn');
+            const btnText = document.getElementById('submitBtnText');
+            const errorBanner = document.getElementById('errorBanner');
+
+            const messageText = textEl.value.trim();
+            errorBanner.style.display = 'none';
+
+            if (!messageText) {
+                errorBanner.textContent = 'Введите текст сообщения или название населённого пункта.';
+                errorBanner.style.display = 'block';
+                return;
+            }
+
+            btn.disabled = true;
+            btnText.textContent = 'Анализ...';
+
+            try {
+                let resultData = null;
+                if (backendAvailable) {
+                    const resp = await fetch('/api/analyze', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({
+                            text: messageText,
+                            model: modelEl.value,
+                            mode: modeEl.value,
+                            district: distEl.value,
+                            time: timeEl.value
+                        })
+                    });
+                    resultData = await resp.json();
+                } else {
+                    resultData = await analyzeInBrowserByMethod(
+                        messageText,
+                        modelEl.value,
+                        timeEl.value,
+                        distEl.value,
+                        modeEl.value
+                    );
+                }
+
+                if (!resultData.ok) {
+                    errorBanner.textContent = resultData.error || 'Населённый пункт не найден.';
+                    errorBanner.style.display = 'block';
+                } else {
+                    const obs = resultData.observation;
+                    if (backendAvailable && resultData.observations) {
+                        observationsState = resultData.observations;
+                        targetsState = resultData.targets || targetsState;
+                        analyticsState = resultData.analytics;
+                    } else {
+                        observationsState.push(obs);
+                        analyticsState = computeAnalyticsInBrowser(observationsState, targetsState);
+                    }
+                    updateAllVisuals(obs.id);
+                    renderDisambiguationPanel(obs);
+                }
+            } catch (err) {
+                errorBanner.textContent = 'Ошибка: ' + err.message;
+                errorBanner.style.display = 'block';
+            } finally {
+                btn.disabled = false;
+                btnText.textContent = 'Отметить на карте';
+            }
+        });
+
+        document.getElementById('compareBtn').addEventListener('click', async () => {
+            const messageText = document.getElementById('messageInput').value.trim();
+            const modelVal = document.getElementById('modelSelect').value;
+            const errorBanner = document.getElementById('errorBanner');
+            const compareBox = document.getElementById('compareBox');
+            const tbody = document.getElementById('compareTableBody');
+
+            errorBanner.style.display = 'none';
+            if (!messageText) {
+                errorBanner.textContent = 'Введите текст сообщения для сравнения 3 методов.';
+                errorBanner.style.display = 'block';
+                return;
+            }
+
+            tbody.innerHTML = '<tr><td colspan="4">Сравнение 3 методов...</td></tr>';
+            compareBox.style.display = 'block';
+
+            let rows = [];
+            if (backendAvailable) {
+                try {
+                    const resp = await fetch('/api/compare', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({ text: messageText, model: modelVal })
+                    });
+                    const data = await resp.json();
+                    if (data.ok) rows = data.comparison || [];
+                } catch (e) {}
+            }
+
+            if (rows.length === 0) {
+                for (const mCode of ['method_1_baseline', 'method_2_morph', 'method_3_hybrid']) {
+                    const t0 = performance.now();
+                    const res = await analyzeInBrowserByMethod(messageText, modelVal, '', '', mCode);
+                    const ms = (performance.now() - t0).toFixed(1);
+                    const obs = res.observation || {};
+                    const labelMap = {
+                        'method_1_baseline': '1. Базовый (им. падеж)',
+                        'method_2_morph': '2. Морфология + нечёткий',
+                        'method_3_hybrid': '3. Гибрид (LLM + ФИАС)'
+                    };
+                    rows.push({
+                        method_label: labelMap[mCode],
+                        found: res.ok,
+                        matched_full: obs.settlement_full || 'Не найден',
+                        district: obs.district || '—',
+                        vector_desc: (obs.vector && obs.vector.description) || 'Нет вектора',
+                        elapsed_ms: ms
+                    });
+                }
+            }
+
+            tbody.innerHTML = rows.map(r => `
+                <tr>
+                    <td><b>${escapeHtml(r.method_label.split(':')[0])}</b></td>
+                    <td>${r.found ? `<span class="badge-ok">✔ ${escapeHtml(r.matched_full)}</span><br/><span style="color:#94a3b8;">${escapeHtml(r.district.replace(' муниципальный район', ' р-н'))}</span>` : `<span class="badge-fail">✘ Не распознал</span>`}</td>
+                    <td>${escapeHtml(r.vector_desc)}</td>
+                    <td>${escapeHtml(r.elapsed_ms)} мс</td>
+                </tr>
+            `).join('');
+        });
+
+        document.getElementById('clearBtn').addEventListener('click', async () => {
+            if (backendAvailable) {
+                const resp = await fetch('/api/clear', { method: 'POST' });
+                const data = await resp.json();
+                observationsState = data.observations || [];
+                analyticsState = data.analytics || null;
+            } else {
+                observationsState = [];
+                analyticsState = computeAnalyticsInBrowser(observationsState, targetsState);
+            }
+            document.getElementById('disambigBox').style.display = 'none';
+            document.getElementById('compareBox').style.display = 'none';
+            updateAllVisuals();
+        });
+
+        checkStatusAndInit();
+    </script>
+</body>
+</html>
